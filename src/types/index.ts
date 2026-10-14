@@ -97,3 +97,78 @@ export interface CheckInLog {
   goiTap: GoiTapType;
   faceIdVerified?: boolean; // Xác thực qua Face ID
 }
+
+export type LoaiBaiTap = 'STRENGTH' | 'CARDIO' | 'HIIT_FUNCTIONAL';
+
+export interface BaiTapMau {
+  id: string;
+  ten: string;
+  nhomCo: string;
+  loai: LoaiBaiTap;
+  metScore: number; // Hệ số MET tiêu hao năng lượng
+  donVi: 'REPS_SETS' | 'DURATION'; // tập tạ hiệp/rep hay theo phút
+  caloMoiRepKhoang?: number; // ước tính cho rep/kg
+  moTa: string;
+}
+
+export interface ChiTietBaiTapLog {
+  id: string;
+  tenBaiTap: string;
+  loai: LoaiBaiTap;
+  nhomCo?: string;
+  // Cho bài tập tạ / kháng lực
+  soHiep?: number;
+  soRep?: number;
+  mucTaKg?: number;
+  // Cho bài tập cardio / thời gian
+  thoiGianPhut?: number;
+  cuongDo?: 'THAP' | 'TRUNG_BINH' | 'CAO'; // Dốc/Tốc độ cao
+  caloTieuHao: number;
+}
+
+export interface NhatKyTapLuyen {
+  id: string;
+  maHV: string;
+  ngayTap: string; // YYYY-MM-DD
+  thoiGian: string; // HH:mm
+  tongCalo: number;
+  tongThoiGianPhut: number;
+  ghiChu?: string;
+  danhSachBaiTap: ChiTietBaiTapLog[];
+}
+
+export type CongThanhToan = 'VIETQR' | 'MOMO' | 'VNPAY' | 'ZALOPAY';
+
+export type MucDichThanhToan = 'GIA_HAN_GOI' | 'NANG_CAP_GOI' | 'DAT_CA_PT_1_1';
+
+export type TrangThaiThanhToan = 'CHO_THANH_TOAN' | 'THANH_CONG' | 'THAT_BAI';
+
+export interface GiaoDichThanhToan {
+  id: string; // GD_xxx
+  maHV: string;
+  tenHV: string;
+  soDienThoai: string;
+  congThanhToan: CongThanhToan;
+  mucDich: MucDichThanhToan;
+  soTien: number;
+  noiDung: string;
+  ngayTao: string;
+  trangThai: TrangThaiThanhToan;
+  maGiaoDichNganHang?: string;
+  // Chi tiết đi kèm nếu là đặt ca PT
+  thongTinPT?: {
+    maHLV: string;
+    tenHLV: string;
+    ngay: string;
+    khungGio: string;
+    noiDungTap: string;
+  };
+  // Chi tiết nếu là gia hạn
+  thongTinGoi?: {
+    tenGoi: string;
+    soThang: number;
+    ngayHetHanMoi: string;
+  };
+}
+
+

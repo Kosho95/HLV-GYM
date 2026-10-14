@@ -5,16 +5,25 @@ import type {
   LichHenPT, 
   HoSoTriLieu, 
   CheckInLog, 
-  TrangThaiHocVien 
+  TrangThaiHocVien,
+  BaiTapMau,
+  NhatKyTapLuyen,
+  GiaoDichThanhToan,
+  CongThanhToan
 } from '../types';
 import { 
   INITIAL_MEMBERS, 
   INITIAL_TRAINERS, 
   INITIAL_SCHEDULES, 
   INITIAL_THERAPY_RECORDS, 
-  INITIAL_CHECKIN_LOGS 
+  INITIAL_CHECKIN_LOGS,
+  EXERCISE_CATALOG,
+  INITIAL_WORKOUT_LOGS,
+  INITIAL_TRANSACTIONS
 } from '../data/mockData';
 import { soundEffects } from '../utils/audio';
+
+
 
 export interface ToastMessage {
   id: string;
@@ -59,6 +68,36 @@ interface GymContextType {
   toggleExerciseCompleted: (recordId: string, exerciseId: string) => void;
   addTherapyRecordSession: (recordId: string, session: { diemDau: number; ghiChu: string; canNang?: number; baiTapThem?: string }) => void;
   
+  // Workout Logging & Calorie Tracker
+  workoutLogs: NhatKyTapLuyen[];
+  exerciseCatalog: BaiTapMau[];
+  addWorkoutLog: (log: Omit<NhatKyTapLuyen, 'id'>) => void;
+  deleteWorkoutLog: (id: string) => void;
+  calculateExerciseCalories: (
+    exercise: BaiTapMau, 
+    params: { soHiep?: number; soRep?: number; mucTaKg?: number; thoiGianPhut?: number; cuongDo?: 'THAP' | 'TRUNG_BINH' | 'CAO'; canNangKg?: number }
+  ) => number;
+
+  // Payment Transactions & Online Gateways
+  transactions: GiaoDichThanhToan[];
+  processOnlinePayment: (params: {
+    maHV: string;
+    congThanhToan: CongThanhToan;
+    mucDich: 'GIA_HAN_GOI' | 'DAT_CA_PT_1_1';
+    soTien: number;
+    thongTinPT?: {
+      maHLV: string;
+      tenHLV: string;
+      ngay: string;
+      khungGio: string;
+      noiDungTap: string;
+    };
+    thongTinGoi?: {
+      tenGoi: string;
+      soThang: number;
+    };
+  }) => { success: boolean; transaction: GiaoDichThanhToan };
+
   // Kiosk Check-in
   checkIn: (query: string) => CheckInResult;
   checkInWithFaceId: (memberId: string) => CheckInResult;
@@ -75,7 +114,9 @@ const STORAGE_KEYS = {
   SCHEDULES: 'hlvgym_schedules_v2',
   THERAPY: 'hlvgym_therapy_v2',
   LOGS: 'hlvgym_checkin_logs_v2',
-  TRAINER: 'hlvgym_active_trainer_v2'
+  TRAINER: 'hlvgym_active_trainer_v2',
+  WORKOUTS: 'hlvgym_workouts_v1',
+  TRANSACTIONS: 'hlvgym_transactions_v1'
 };
 
 export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -166,6 +207,32 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_CHECKIN_LOGS;
   });
 
+  const [workoutLogs, setWorkoutLogs] = useState<NhatKyTapLuyen[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.WORKOUTS);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return INITIAL_WORKOUT_LOGS;
+  });
+
+  const [exerciseCatalog] = useState<BaiTapMau[]>(EXERCISE_CATALOG);
+
+  const [transactions, setTransactions] = useState<GiaoDichThanhToan[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return INITIAL_TRANSACTIONS;
+  });
+
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   // Sync to localStorage
@@ -188,6 +255,16 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.TRAINER, JSON.stringify(activeTrainer));
   }, [activeTrainer]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.WORKOUTS, JSON.stringify(workoutLogs));
+  }, [workoutLogs]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(transactions));
+  }, [transactions]);
+
+
 
   const addToast = (type: ToastMessage['type'], title: string, message: string) => {
     const id = Date.now().toString() + Math.random().toString();
@@ -585,18 +662,164 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
+  // Workout Logging & Calorie Tracker methods
+  const calculateExerciseCalories = (
+    exercise: BaiTapMau, 
+    params: { soHiep?: number; soRep?: number; mucTaKg?: number; thoiGianPhut?: number; cuongDo?: 'THAP' | 'TRUNG_BINH' | 'CAO'; canNangKg?: number }
+  ): number => {
+    const userWeight = params.canNangKg || 68; // Default 68kg nếu chưa rõ
+
+    if (exercise.donVi === 'DURATION' || exercise.loai === 'CARDIO') {
+      const minutes = params.thoiGianPhut || 20;
+      let intensityFactor = 1.0;
+      if (params.cuongDo === 'THAP') intensityFactor = 0.85;
+      if (params.cuongDo === 'CAO') intensityFactor = 1.25;
+
+      // Công thức chuẩn ACSM: Calo/phút = (MET * 3.5 * Cân nặng (kg)) / 200
+      const caloPerMin = (exercise.metScore * intensityFactor * 3.5 * userWeight) / 200;
+      return Math.round(caloPerMin * minutes);
+    } else {
+      // Tập tạ / Kháng lực: Dựa trên tổng volume (sets * reps * weight multiplier) kết hợp MET & EPOC
+      const sets = params.soHiep || 3;
+      const reps = params.soRep || 10;
+      const weight = params.mucTaKg || 20;
+
+      // Calo cơ bản mỗi rep theo nhóm cơ lớn/nhỏ
+      const basePerRep = exercise.caloMoiRepKhoang || 0.4;
+      // Trọng lượng tạ tạo thêm áp lực tiêu hao (cứ mỗi 20kg tạ tăng ~15% tiêu hao)
+      const loadFactor = 1 + (weight / 100) * 0.4;
+      const totalReps = sets * reps;
+      
+      // Calo trong hiệp + Calo nghỉ giữa hiệp (EPOC/nghỉ ngơi ~ 1.5 kcal/phút)
+      const restTimeMin = (sets - 1) * 1.5;
+      const restBurn = restTimeMin * 1.8;
+      const liftingBurn = totalReps * basePerRep * (userWeight / 70) * loadFactor;
+
+      return Math.round(liftingBurn + restBurn);
+    }
+  };
+
+  const addWorkoutLog = (logData: Omit<NhatKyTapLuyen, 'id'>) => {
+    const newLog: NhatKyTapLuyen = {
+      ...logData,
+      id: 'WL_' + Date.now()
+    };
+    setWorkoutLogs(prev => [newLog, ...prev]);
+    soundEffects.playSuccessChime();
+    addToast('success', 'Đã Lưu Buổi Tập!', `Ghi nhận đốt cháy ${newLog.tongCalo} kcal qua ${newLog.danhSachBaiTap.length} bài tập.`);
+  };
+
+  const deleteWorkoutLog = (id: string) => {
+    setWorkoutLogs(prev => prev.filter(w => w.id !== id));
+    addToast('info', 'Đã Xóa Nhật Ký', 'Đã gỡ bỏ bản ghi buổi tập thành công.');
+  };
+
+  // Online Payment Processor (VNPay, MoMo, ZaloPay, VietQR)
+  const processOnlinePayment = (params: {
+    maHV: string;
+    congThanhToan: CongThanhToan;
+    mucDich: 'GIA_HAN_GOI' | 'DAT_CA_PT_1_1';
+    soTien: number;
+    thongTinPT?: {
+      maHLV: string;
+      tenHLV: string;
+      ngay: string;
+      khungGio: string;
+      noiDungTap: string;
+    };
+    thongTinGoi?: {
+      tenGoi: string;
+      soThang: number;
+    };
+  }): { success: boolean; transaction: GiaoDichThanhToan } => {
+    const student = members.find(m => m.id === params.maHV);
+    if (!student) throw new Error('Không tìm thấy học viên!');
+
+    const now = new Date();
+    const dateFormatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    const bankRef = `${params.congThanhToan}_${Date.now().toString().slice(-6)}`;
+
+    let contentDesc = '';
+    let newExpiryDate = student.ngayHetHan;
+
+    if (params.mucDich === 'GIA_HAN_GOI') {
+      const monthsToAdd = params.thongTinGoi?.soThang || 1;
+      const daysToAdd = monthsToAdd * 30;
+      const baseDate = new Date(student.ngayHetHan) > new Date() ? new Date(student.ngayHetHan) : new Date();
+      baseDate.setDate(baseDate.getDate() + daysToAdd);
+      newExpiryDate = baseDate.toISOString().split('T')[0];
+      contentDesc = `${student.id} GIA HAN ${params.thongTinGoi?.tenGoi || 'GOI TAP'} +${daysToAdd} NGAY`;
+
+      // Update student expiry date directly
+      setMembers(prev => prev.map(m => m.id === student.id ? {
+        ...m,
+        ngayHetHan: newExpiryDate,
+        trangThai: 'DANG_TAP'
+      } : m));
+
+    } else if (params.mucDich === 'DAT_CA_PT_1_1' && params.thongTinPT) {
+      contentDesc = `${student.id} THANH TOAN CA PT ${params.thongTinPT.tenHLV} (${params.thongTinPT.khungGio} ${params.thongTinPT.ngay})`;
+
+      // Create PT appointment automatically
+      createSchedule({
+        maHV: student.id,
+        tenHV: student.hoTen,
+        maHLV: params.thongTinPT.maHLV,
+        tenHLV: params.thongTinPT.tenHLV,
+        ngay: params.thongTinPT.ngay,
+        khungGio: params.thongTinPT.khungGio,
+        trangThai: 'DAT_THANH_CONG',
+        noiDungTap: `${params.thongTinPT.noiDungTap} (Đã TT online qua ${params.congThanhToan})`
+      });
+    }
+
+    const newTx: GiaoDichThanhToan = {
+      id: 'GD_' + Date.now(),
+      maHV: student.id,
+      tenHV: student.hoTen,
+      soDienThoai: student.soDienThoai,
+      congThanhToan: params.congThanhToan,
+      mucDich: params.mucDich,
+      soTien: params.soTien,
+      noiDung: contentDesc,
+      ngayTao: dateFormatted,
+      trangThai: 'THANH_CONG',
+      maGiaoDichNganHang: bankRef,
+      thongTinPT: params.thongTinPT,
+      thongTinGoi: params.thongTinGoi ? {
+        ...params.thongTinGoi,
+        ngayHetHanMoi: newExpiryDate
+      } : undefined
+    };
+
+    setTransactions(prev => [newTx, ...prev]);
+    soundEffects.playSuccessChime();
+
+    addToast(
+      'success',
+      'Thanh Toán Trực Tuyến Thành Công!',
+      `Đã khớp giao dịch ${params.soTien.toLocaleString('vi-VN')} VNĐ qua cổng ${params.congThanhToan} (${bankRef}).`
+    );
+
+    return { success: true, transaction: newTx };
+  };
+
   const resetToMockData = () => {
     localStorage.removeItem(STORAGE_KEYS.MEMBERS);
     localStorage.removeItem(STORAGE_KEYS.SCHEDULES);
     localStorage.removeItem(STORAGE_KEYS.THERAPY);
     localStorage.removeItem(STORAGE_KEYS.LOGS);
     localStorage.removeItem(STORAGE_KEYS.TRAINER);
+    localStorage.removeItem(STORAGE_KEYS.WORKOUTS);
+    localStorage.removeItem(STORAGE_KEYS.TRANSACTIONS);
 
     setMembers(INITIAL_MEMBERS.map(m => ({ ...m, trangThai: getStatusFromExpiry(m.ngayHetHan) })));
     setSchedules(INITIAL_SCHEDULES);
     setTherapyRecords(INITIAL_THERAPY_RECORDS);
     setCheckInLogs(INITIAL_CHECKIN_LOGS);
     setActiveTrainerState(INITIAL_TRAINERS[0]);
+    setWorkoutLogs(INITIAL_WORKOUT_LOGS);
+    setTransactions(INITIAL_TRANSACTIONS);
 
     addToast('info', 'Khôi Phục Dữ Liệu Gốc', 'Đã đặt lại toàn bộ Mock Data mẫu ban đầu cho HLV GYM Trảng Bom.');
   };
@@ -609,6 +832,9 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       therapyRecords,
       checkInLogs,
       activeTrainer,
+      workoutLogs,
+      exerciseCatalog,
+      transactions,
       toasts,
       setActiveTrainer,
       removeToast,
@@ -623,6 +849,10 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateTherapyPainScore,
       toggleExerciseCompleted,
       addTherapyRecordSession,
+      addWorkoutLog,
+      deleteWorkoutLog,
+      calculateExerciseCalories,
+      processOnlinePayment,
       checkIn,
       checkInWithFaceId,
       resetToMockData,

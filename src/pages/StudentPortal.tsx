@@ -17,27 +17,77 @@ import {
   AlertCircle,
   FileCheck2,
   Lock,
-  Edit3
+  Edit3,
+  Flame,
+
+  Timer,
+  Plus,
+  Trash2,
+  History,
+  ChevronRight,
+  Award,
+  QrCode,
+  Wallet,
+  Smartphone,
+  Landmark,
+  Receipt,
+  CalendarDays,
+  Copy,
+  Clock
 } from 'lucide-react';
 import { useGym } from '../context/GymContext';
-import type { HocVien } from '../types';
+import type { HocVien, ChiTietBaiTapLog, CongThanhToan } from '../types';
 
 export const StudentPortal: React.FC = () => {
   const { 
     members, 
+    trainers,
     therapyRecords, 
     toggleExerciseCompleted, 
     updateMemberProfile,
     registerFaceId,
-    getDaysRemaining 
+    getDaysRemaining,
+    workoutLogs,
+    exerciseCatalog,
+    addWorkoutLog,
+    deleteWorkoutLog,
+    calculateExerciseCalories,
+    transactions,
+    processOnlinePayment
   } = useGym();
+
+
 
   // Active student selection (default to HV005 who has therapy record, or HV001)
   const [selectedStudentId, setSelectedStudentId] = useState<string>('HV005');
   const currentStudent = members.find(m => m.id === selectedStudentId) || members[0];
 
   // Tab navigation inside Student Portal
-  const [activeTab, setActiveTab] = useState<'CARD' | 'PROFILE_FACEID' | 'SPINE' | 'EXERCISES' | 'MACRO'>('CARD');
+  const [activeTab, setActiveTab] = useState<'CARD' | 'PROFILE_FACEID' | 'PAYMENT' | 'SPINE' | 'EXERCISES' | 'MACRO' | 'WORKOUT_LOG'>('CARD');
+
+  // Workout Logger State
+  const [selectedExerciseId, setSelectedExerciseId] = useState<string>(exerciseCatalog[0]?.id || 'EX_LAT_PULLDOWN');
+  const [inputSets, setInputSets] = useState<number>(4);
+  const [inputReps, setInputReps] = useState<number>(12);
+  const [inputWeightKg, setInputWeightKg] = useState<number>(35);
+  const [inputDurationMin, setInputDurationMin] = useState<number>(30);
+  const [inputIntensity, setInputIntensity] = useState<'THAP' | 'TRUNG_BINH' | 'CAO'>('TRUNG_BINH');
+  const [sessionNotes, setSessionNotes] = useState<string>('');
+  const [currentSessionItems, setCurrentSessionItems] = useState<ChiTietBaiTapLog[]>([]);
+
+  // Online Payment State & Checkout Modal
+  const [selectedGateway, setSelectedGateway] = useState<CongThanhToan>('VIETQR');
+  const [paymentPurpose, setPaymentPurpose] = useState<'GIA_HAN_GOI' | 'DAT_CA_PT_1_1'>('GIA_HAN_GOI');
+  const [selectedPlanMonths, setSelectedPlanMonths] = useState<number>(1);
+  const [selectedTrainerForPT, setSelectedTrainerForPT] = useState<string>(trainers[0]?.id || 'HLV01');
+  const [ptDate, setPtDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [ptTimeSlot, setPtTimeSlot] = useState<string>('08:00 - 09:30');
+  const [ptSessionContent, setPtSessionContent] = useState<string>('Tập chuyên sâu phục hồi đốt sống lưng & Kéo dãn cơ');
+  const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
+  const [showCheckoutModal, setShowCheckoutModal] = useState<boolean>(false);
+  const [completedPaymentTx, setCompletedPaymentTx] = useState<any | null>(null);
+
+
 
   // Therapy record if available
   const studentTherapy = therapyRecords.find(t => t.maHV === currentStudent?.id) || therapyRecords[0];
@@ -196,6 +246,132 @@ export const StudentPortal: React.FC = () => {
   const macroResult = calculateTDEE();
   const daysLeft = currentStudent ? getDaysRemaining(currentStudent.ngayHetHan) : 0;
 
+  // Selected exercise details
+  const activeExerciseObj = exerciseCatalog.find(e => e.id === selectedExerciseId) || exerciseCatalog[0];
+
+  // Realtime preview of exercise calorie before adding
+  const previewItemCalo = activeExerciseObj ? calculateExerciseCalories(activeExerciseObj, {
+    soHiep: inputSets,
+    soRep: inputReps,
+    mucTaKg: inputWeightKg,
+    thoiGianPhut: inputDurationMin,
+    cuongDo: inputIntensity,
+    canNangKg: currentStudent?.canNang || 68
+  }) : 0;
+
+  // Add exercise to current workout session draft
+  const handleAddExerciseToSession = () => {
+    if (!activeExerciseObj) return;
+
+    const newItem: ChiTietBaiTapLog = {
+      id: 'EX_ITEM_' + Date.now(),
+      tenBaiTap: activeExerciseObj.ten,
+      loai: activeExerciseObj.loai,
+      nhomCo: activeExerciseObj.nhomCo,
+      soHiep: activeExerciseObj.donVi === 'REPS_SETS' ? inputSets : undefined,
+      soRep: activeExerciseObj.donVi === 'REPS_SETS' ? inputReps : undefined,
+      mucTaKg: activeExerciseObj.donVi === 'REPS_SETS' ? inputWeightKg : undefined,
+      thoiGianPhut: activeExerciseObj.donVi === 'DURATION' ? inputDurationMin : undefined,
+      cuongDo: activeExerciseObj.donVi === 'DURATION' ? inputIntensity : undefined,
+      caloTieuHao: previewItemCalo
+    };
+
+    setCurrentSessionItems(prev => [...prev, newItem]);
+  };
+
+  const handleRemoveExerciseFromSession = (itemId: string) => {
+    setCurrentSessionItems(prev => prev.filter(i => i.id !== itemId));
+  };
+
+  const totalSessionCalories = currentSessionItems.reduce((sum, item) => sum + item.caloTieuHao, 0);
+  const totalSessionMinutes = currentSessionItems.reduce((sum, item) => {
+    if (item.thoiGianPhut) return sum + item.thoiGianPhut;
+    if (item.soHiep) return sum + Math.round(item.soHiep * 2.5); // Ước lượng ~2.5 phút/set tập tạ
+    return sum + 10;
+  }, 0);
+
+  const handleSaveWorkoutSession = () => {
+    if (currentSessionItems.length === 0 || !currentStudent) return;
+
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const dateStr = now.toISOString().split('T')[0];
+
+    addWorkoutLog({
+      maHV: currentStudent.id,
+      ngayTap: dateStr,
+      thoiGian: timeStr,
+      tongCalo: totalSessionCalories,
+      tongThoiGianPhut: totalSessionMinutes,
+      ghiChu: sessionNotes.trim() || undefined,
+      danhSachBaiTap: currentSessionItems
+    });
+
+    // Reset draft
+    setCurrentSessionItems([]);
+    setSessionNotes('');
+  };
+
+  const studentWorkoutLogs = workoutLogs.filter(w => w.maHV === currentStudent?.id);
+  const totalBurnedAllTime = studentWorkoutLogs.reduce((sum, w) => sum + w.tongCalo, 0);
+
+  // Pricing calculation
+  const monthlyFee = currentStudent?.nhom === 'HSSV' ? 250000 : 300000;
+  const renewalDiscount = selectedPlanMonths === 3 ? 0.05 : selectedPlanMonths === 6 ? 0.1 : 0;
+  const renewalSubtotal = monthlyFee * selectedPlanMonths;
+  const renewalTotal = Math.round(renewalSubtotal * (1 - renewalDiscount));
+
+  const ptSessionPrice = 350000; // 350k/ca 1-1 trị liệu & nắn chỉnh cột sống
+
+  const currentPayAmount = paymentPurpose === 'GIA_HAN_GOI' ? renewalTotal : ptSessionPrice;
+
+  const studentTransactions = transactions.filter(t => t.maHV === currentStudent?.id);
+
+  // Trigger checkout modal
+  const openCheckout = (purpose: 'GIA_HAN_GOI' | 'DAT_CA_PT_1_1') => {
+    setPaymentPurpose(purpose);
+    setCompletedPaymentTx(null);
+    setShowCheckoutModal(true);
+  };
+
+  // Simulate payment processing through VietQR / MoMo / VNPay / ZaloPay API
+  const handleExecuteOnlinePayment = () => {
+    if (!currentStudent) return;
+    setIsProcessingPayment(true);
+
+    const activeTrainerObj = trainers.find(t => t.id === selectedTrainerForPT) || trainers[0];
+
+    setTimeout(() => {
+      try {
+        const result = processOnlinePayment({
+          maHV: currentStudent.id,
+          congThanhToan: selectedGateway,
+          mucDich: paymentPurpose,
+          soTien: currentPayAmount,
+          thongTinPT: paymentPurpose === 'DAT_CA_PT_1_1' ? {
+            maHLV: activeTrainerObj.id,
+            tenHLV: activeTrainerObj.hoTen,
+            ngay: ptDate,
+            khungGio: ptTimeSlot,
+            noiDungTap: ptSessionContent
+          } : undefined,
+          thongTinGoi: paymentPurpose === 'GIA_HAN_GOI' ? {
+            tenGoi: currentStudent.nhom === 'HSSV' ? 'Thẻ Gym Học Sinh - Sinh Viên' : 'Thẻ Gym Người Đi Làm',
+            soThang: selectedPlanMonths
+          } : undefined
+        });
+
+        setIsProcessingPayment(false);
+        setCompletedPaymentTx(result.transaction);
+      } catch (err: any) {
+        setIsProcessingPayment(false);
+        console.error(err);
+      }
+    }, 1800);
+  };
+
+
+
   return (
     <div className="flex-1 bg-slate-50 py-8 sm:py-12">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
@@ -297,7 +473,26 @@ export const StudentPortal: React.FC = () => {
           </button>
 
           <button
+            id="tab-payment"
+            onClick={() => { setActiveTab('PAYMENT'); stopCamera(); }}
+            className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+              activeTab === 'PAYMENT'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/25 ring-2 ring-blue-300'
+                : 'bg-white text-slate-600 hover:text-blue-600 hover:bg-blue-50/50 border border-slate-100'
+            }`}
+          >
+            <Wallet className="w-4 h-4 text-blue-500 group-hover:text-blue-600" />
+            <span>Thanh Toán Online (QR / Ví)</span>
+            {daysLeft <= 3 && (
+              <span className="text-[10px] bg-rose-500 text-white font-black px-1.5 py-0.5 rounded-full animate-bounce">
+                Hết hạn
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => { setActiveTab('SPINE'); stopCamera(); }}
+
             className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
               activeTab === 'SPINE'
                 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
@@ -322,16 +517,35 @@ export const StudentPortal: React.FC = () => {
 
           <button
             onClick={() => { setActiveTab('MACRO'); stopCamera(); }}
-            className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all shrink-0 ${
+            className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
               activeTab === 'MACRO'
                 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
                 : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-100'
             }`}
           >
             <Calculator className="w-4 h-4" />
-            <span>Tính Macro & Calo Dinh Dưỡng</span>
+            <span>Tính Macro & Dinh Dưỡng</span>
+          </button>
+
+          <button
+            id="tab-workout-log"
+            onClick={() => { setActiveTab('WORKOUT_LOG'); stopCamera(); }}
+            className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+              activeTab === 'WORKOUT_LOG'
+                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/25 ring-2 ring-orange-300'
+                : 'bg-white text-slate-600 hover:text-orange-600 hover:bg-orange-50/50 border border-slate-100'
+            }`}
+          >
+            <Flame className="w-4 h-4 text-orange-500 group-hover:text-orange-600" />
+            <span>Nhật Ký Tập & Calo Tiêu Hao</span>
+            {studentWorkoutLogs.length > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${activeTab === 'WORKOUT_LOG' ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-700'}`}>
+                {studentWorkoutLogs.length}
+              </span>
+            )}
           </button>
         </div>
+
 
         {/* Tab 1: E-Membership Card */}
         {activeTab === 'CARD' && (
@@ -487,11 +701,52 @@ export const StudentPortal: React.FC = () => {
                     {currentStudent?.hasFaceId ? 'Xem Dữ Liệu Face ID' : 'Chụp Ảnh Đăng Ký Ngay'}
                   </button>
                 </div>
+
+                {/* Online Payment & Renewal CTA Card */}
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-600 to-slate-900 text-white shadow-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-200">
+                      CỔNG THANH TOÁN ONLINE
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-bold">
+                      VietQR / MoMo / VNPay
+                    </span>
+                  </div>
+
+                  <div>
+                    <h4 className="font-extrabold text-sm text-white">Gia Hạn Gói Hoặc Đặt Ca PT 1:1</h4>
+                    <p className="text-[11px] text-blue-100 leading-relaxed mt-0.5">
+                      Thanh toán quét mã trực tuyến tức thì không cần tiền mặt tại quầy. Thẻ tự động cộng ngày sau khi khớp lệnh.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => openCheckout('GIA_HAN_GOI')}
+                      className="py-2.5 px-3 rounded-xl bg-white text-blue-900 hover:bg-blue-50 font-black text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <CreditCard className="w-3.5 h-3.5 text-blue-700" />
+                      <span>Gia Hạn Thẻ</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openCheckout('DAT_CA_PT_1_1')}
+                      className="py-2.5 px-3 rounded-xl bg-blue-400/30 hover:bg-blue-400/40 border border-white/25 text-white font-black text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <CalendarDays className="w-3.5 h-3.5" />
+                      <span>Đặt Ca PT 1:1</span>
+                    </button>
+                  </div>
+                </div>
+
               </div>
             </div>
 
           </div>
         )}
+
 
         {/* Tab 2: Profile & Face ID Security (NEW!) */}
         {activeTab === 'PROFILE_FACEID' && (
@@ -1113,7 +1368,923 @@ export const StudentPortal: React.FC = () => {
           </div>
         )}
 
+        {/* Tab 6: Workout Logging & Calorie Tracker */}
+        {activeTab === 'WORKOUT_LOG' && (
+          <div className="space-y-8">
+            
+            {/* Header summary banner */}
+            <div className="relative overflow-hidden bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-orange-600/20">
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                  <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2">
+                    <Flame className="w-4 h-4 text-amber-200 fill-amber-200" />
+                    <span>Bộ Đếm Năng Lượng Tiêu Hao HLV GYM</span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+                    Nhập Bài Tập & Tính Calo Tự Động
+                  </h2>
+                  <p className="text-xs sm:text-sm text-orange-100 max-w-xl mt-1">
+                    Hệ thống tính toán chuẩn xác dựa trên số hiệp, rep, mức tạ và thời gian cardio (theo chỉ số MET và cơ chế phục hồi cơ thể).
+                  </p>
+                </div>
+
+                {/* Quick stats badge */}
+                <div className="flex items-center gap-4 bg-black/20 backdrop-blur-md p-4 rounded-2xl border border-white/15">
+                  <div className="text-center px-2">
+                    <span className="text-[10px] font-bold uppercase text-orange-200 block">Tổng Calo Đã Đốt</span>
+                    <span className="text-2xl sm:text-3xl font-black text-white">{totalBurnedAllTime}</span>
+                    <span className="text-[10px] text-orange-200 block">kcal tích lũy</span>
+                  </div>
+                  <div className="w-px h-10 bg-white/20" />
+                  <div className="text-center px-2">
+                    <span className="text-[10px] font-bold uppercase text-orange-200 block">Số Buổi Đã Lưu</span>
+                    <span className="text-2xl sm:text-3xl font-black text-white">{studentWorkoutLogs.length}</span>
+                    <span className="text-[10px] text-orange-200 block">buổi tập</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Background decorative glow */}
+              <div className="absolute -top-12 -right-12 w-64 h-64 bg-amber-400/20 rounded-full blur-3xl pointer-events-none" />
+            </div>
+
+            {/* Main Interactive Grid: Form Builder & Current Session Cart */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              
+              {/* Form Input: 7 cols */}
+              <div className="lg:col-span-7 bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-xs space-y-6">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center font-bold">
+                      <Plus className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">
+                        Thêm Động Tác Vừa Tập
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Chọn bài tập tạ hoặc cardio leo dốc máy chạy để tính calo
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-xl">
+                    Cân nặng: {currentStudent?.canNang || 68} kg
+                  </span>
+                </div>
+
+                <div className="space-y-5">
+                  {/* Select Exercise from catalog */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 uppercase mb-2">
+                      Chọn Bài Tập / Thiết Bị
+                    </label>
+                    <select
+                      value={selectedExerciseId}
+                      onChange={(e) => {
+                        setSelectedExerciseId(e.target.value);
+                        const found = exerciseCatalog.find(x => x.id === e.target.value);
+                        if (found) {
+                          if (found.donVi === 'DURATION') {
+                            setInputDurationMin(found.id === 'EX_INCLINE_TREADMILL' ? 30 : 20);
+                          } else {
+                            if (found.id === 'EX_LAT_PULLDOWN') { setInputSets(4); setInputReps(12); setInputWeightKg(35); }
+                            if (found.id === 'EX_BENCH_PRESS') { setInputSets(4); setInputReps(10); setInputWeightKg(50); }
+                            if (found.id === 'EX_BARBELL_SQUAT') { setInputSets(4); setInputReps(10); setInputWeightKg(60); }
+                          }
+                        }
+                      }}
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    >
+                      <optgroup label="TẬP TẠ & KHÁNG LỰC (STRENGTH)">
+                        {exerciseCatalog.filter(e => e.loai === 'STRENGTH').map(e => (
+                          <option key={e.id} value={e.id}>{e.ten} &bull; {e.nhomCo}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="CARDIO & TIM MẠCH (CHẠY BỘ / LEO DỐC)">
+                        {exerciseCatalog.filter(e => e.loai === 'CARDIO').map(e => (
+                          <option key={e.id} value={e.id}>{e.ten} &bull; {e.nhomCo}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="HIIT & PHỤC HỒI CƠ LÕI">
+                        {exerciseCatalog.filter(e => e.loai === 'HIIT_FUNCTIONAL').map(e => (
+                          <option key={e.id} value={e.id}>{e.ten} &bull; {e.nhomCo}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+
+                    {activeExerciseObj && (
+                      <p className="text-xs text-slate-500 mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                        <span>{activeExerciseObj.moTa}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Dynamic inputs depending on unit type */}
+                  {activeExerciseObj?.donVi === 'REPS_SETS' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-orange-50/50 p-4 rounded-2xl border border-orange-100">
+                      <div>
+                        <label className="block text-xs font-bold text-orange-950 uppercase mb-1">
+                          Số Hiệp (Sets)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={inputSets}
+                            onChange={(e) => setInputSets(Math.max(1, Number(e.target.value)))}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-orange-200 bg-white font-black text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          />
+                          <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-semibold pointer-events-none">hiệp</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-orange-950 uppercase mb-1">
+                          Số Rep / Hiệp
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min={1}
+                            max={50}
+                            value={inputReps}
+                            onChange={(e) => setInputReps(Math.max(1, Number(e.target.value)))}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-orange-200 bg-white font-black text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          />
+                          <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-semibold pointer-events-none">reps</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-orange-950 uppercase mb-1">
+                          Mức Tạ (Kg)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min={0}
+                            max={300}
+                            step={2.5}
+                            value={inputWeightKg}
+                            onChange={(e) => setInputWeightKg(Math.max(0, Number(e.target.value)))}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-orange-200 bg-white font-black text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          />
+                          <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-semibold pointer-events-none">kg</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-amber-50/50 p-4 rounded-2xl border border-amber-100">
+                      <div>
+                        <label className="block text-xs font-bold text-amber-950 uppercase mb-1">
+                          Thời Lượng Tập (Phút)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min={1}
+                            max={180}
+                            value={inputDurationMin}
+                            onChange={(e) => setInputDurationMin(Math.max(1, Number(e.target.value)))}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-amber-200 bg-white font-black text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          />
+                          <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-semibold pointer-events-none">phút</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-amber-950 uppercase mb-1">
+                          Cường Độ / Độ Dốc
+                        </label>
+                        <select
+                          value={inputIntensity}
+                          onChange={(e) => setInputIntensity(e.target.value as any)}
+                          className="w-full px-3 py-2.5 rounded-xl border border-amber-200 bg-white font-bold text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        >
+                          <option value="THAP">Nhẹ (Dốc 3-5%, Vừa đi vừa thở đều)</option>
+                          <option value="TRUNG_BINH">Vừa (Dốc 8-10%, Vã mồ hôi đều)</option>
+                          <option value="CAO">Cao (Dốc 12-15% hoặc chạy tốc độ cao)</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Realtime Calorie Estimator Badge */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900 text-white">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center">
+                        <Flame className="w-6 h-6 animate-pulse" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Ước tính tiêu hao động tác này</span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-2xl font-black text-amber-400">~{previewItemCalo}</span>
+                          <span className="text-xs text-slate-300 font-semibold">kcal</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAddExerciseToSession}
+                      className="px-5 py-3 rounded-xl bg-orange-500 hover:bg-orange-400 text-slate-950 font-black text-xs transition-all shadow-md shadow-orange-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>THÊM VÀO BUỔI TẬP</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Current Session Cart / Summary: 5 cols */}
+              <div className="lg:col-span-5 bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-xs space-y-6">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <Flame className="w-5 h-5 text-orange-600" />
+                    <h3 className="text-lg font-bold text-slate-900">
+                      Buổi Tập Hôm Nay
+                    </h3>
+                  </div>
+
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-orange-100 text-orange-800">
+                    {currentSessionItems.length} bài đã thêm
+                  </span>
+                </div>
+
+                {/* Session total stats */}
+                <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-orange-800 block">Tổng Năng Lượng Đốt</span>
+                    <div className="flex items-baseline gap-1 mt-0.5">
+                      <span className="text-3xl font-black text-orange-600">{totalSessionCalories}</span>
+                      <span className="text-xs font-bold text-orange-800">kcal</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-amber-800 block">Thời Lượng Ước Tính</span>
+                    <div className="flex items-baseline gap-1 mt-0.5">
+                      <span className="text-3xl font-black text-amber-700">~{totalSessionMinutes}</span>
+                      <span className="text-xs font-bold text-amber-800">phút</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Exercises list in cart */}
+                <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
+                  {currentSessionItems.length === 0 ? (
+                    <div className="text-center py-8 px-4 border-2 border-dashed border-slate-200 rounded-2xl">
+                      <Dumbbell className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-xs font-semibold text-slate-500">Chưa có bài tập nào trong buổi này</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Chọn bài tập bên trái và bấm "Thêm vào buổi tập"</p>
+                    </div>
+                  ) : (
+                    currentSessionItems.map((item, idx) => (
+                      <div 
+                        key={item.id}
+                        className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-700 font-black text-[10px] flex items-center justify-center">
+                              {idx + 1}
+                            </span>
+                            <span className="font-bold text-slate-800">{item.tenBaiTap}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 pl-6.5">
+                            {item.loai === 'STRENGTH' 
+                              ? `${item.soHiep} hiệp x ${item.soRep} rep (${item.mucTaKg}kg)` 
+                              : `${item.thoiGianPhut} phút (${item.cuongDo === 'CAO' ? 'Dốc cao' : item.cuongDo === 'TRUNG_BINH' ? 'Dốc vừa' : 'Nhẹ'})`}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-orange-600 bg-orange-50 px-2 py-1 rounded-lg border border-orange-200">
+                            +{item.caloTieuHao} kcal
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveExerciseFromSession(item.id)}
+                            className="p-1 text-slate-400 hover:text-rose-500 transition-colors"
+                            title="Xóa bài này"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Session Notes */}
+                {currentSessionItems.length > 0 && (
+                  <div className="space-y-3 pt-2 border-t border-slate-100">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                        Ghi Chú Cảm Nhận / Khớp / HLV (Không bắt buộc)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="VD: Cột sống ổn định, hoàn thành tốt buổi tập chân..."
+                        value={sessionNotes}
+                        onChange={(e) => setSessionNotes(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveWorkoutSession}
+                      className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-extrabold text-xs shadow-lg shadow-orange-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                    >
+                      <Flame className="w-4 h-4 fill-white" />
+                      <span>LƯU NHẬT KÝ BUỔI TẬP VÀO HỒ SƠ</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Workout History Section */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
+                    <History className="w-5 h-5 text-slate-700" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">
+                      Lịch Sử Tập Luyện Của {currentStudent?.hoTen}
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Ghi nhận toàn bộ các buổi tập kèm thống kê calo tiêu hao chi tiết
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl">
+                    {studentWorkoutLogs.length} Bản Ghi
+                  </span>
+                </div>
+              </div>
+
+              {studentWorkoutLogs.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 space-y-2">
+                  <Dumbbell className="w-10 h-10 mx-auto text-slate-300" />
+                  <p className="text-sm font-semibold">Chưa có nhật ký buổi tập nào cho học viên này.</p>
+                  <p className="text-xs">Hãy thêm bài tập và lưu buổi tập ở phần trên nhé!</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {studentWorkoutLogs.map((log) => (
+                    <div 
+                      key={log.id}
+                      className="bg-slate-50/70 hover:bg-slate-50 rounded-2xl p-5 border border-slate-200/80 transition-all space-y-4"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-800 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                              📅 {log.ngayTap} ({log.thoiGian})
+                            </span>
+                            <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+                              <Timer className="w-3.5 h-3.5" /> {log.tongThoiGianPhut} phút
+                            </span>
+                          </div>
+                          {log.ghiChu && (
+                            <p className="text-xs text-slate-600 italic mt-2 bg-white/60 p-2 rounded-xl border border-slate-100">
+                              "{log.ghiChu}"
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-xs font-bold text-orange-600 bg-orange-100/70 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                            <Flame className="w-3.5 h-3.5 fill-orange-500" /> {log.tongCalo} kcal
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Exercises breakdown */}
+                      <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                          Chi Tiết Các Bài Tập:
+                        </span>
+                        <div className="space-y-1">
+                          {log.danhSachBaiTap.map((ex) => (
+                            <div key={ex.id} className="flex items-center justify-between text-xs py-0.5">
+                              <span className="font-semibold text-slate-700 flex items-center gap-1">
+                                <ChevronRight className="w-3 h-3 text-orange-500" />
+                                {ex.tenBaiTap}
+                                <span className="text-[10px] text-slate-400">
+                                  ({ex.loai === 'STRENGTH' ? `${ex.soHiep}x${ex.soRep} (${ex.mucTaKg}kg)` : `${ex.thoiGianPhut}p`})
+                                </span>
+                              </span>
+                              <span className="font-bold text-slate-600">+{ex.caloTieuHao} kcal</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-2 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => deleteWorkoutLog(log.id)}
+                          className="text-[11px] font-bold text-slate-400 hover:text-rose-500 flex items-center gap-1 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Xóa bản ghi này
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+
+        {/* Tab 3: Online Payment Gateways (VietQR, MoMo, VNPay, ZaloPay) */}
+        {activeTab === 'PAYMENT' && (
+
+          <div className="space-y-8">
+            
+            {/* Header Hero Banner */}
+            <div className="relative overflow-hidden bg-gradient-to-r from-blue-700 via-indigo-700 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-blue-700/20">
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                  <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2">
+                    <Wallet className="w-4 h-4 text-sky-300" />
+                    <span>Cổng Thanh Toán Điện Tử 24/7 &bull; Không Cần Tiền Mặt</span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+                    Gia Hạn Thẻ & Đặt Lịch PT 1-Kèm-1 Trực Tuyến
+                  </h2>
+                  <p className="text-xs sm:text-sm text-blue-100 max-w-xl mt-1">
+                    Hỗ trợ chuẩn kết nối liên ngân hàng VietQR NAPAS 247, ví điện tử MoMo, VNPay-QR và ZaloPay. Tự động kích hoạt gói ngay sau khi quét mã thành công.
+                  </p>
+                </div>
+
+                {/* Gateway Logos preview */}
+                <div className="flex flex-wrap items-center gap-2 bg-black/30 backdrop-blur-md p-3.5 rounded-2xl border border-white/15">
+                  <span className="text-[10px] font-extrabold uppercase text-sky-200 block w-full mb-1">
+                    Cổng Hỗ Trợ:
+                  </span>
+                  <span className="px-2.5 py-1 rounded-xl bg-sky-500 text-white font-black text-xs">VietQR</span>
+                  <span className="px-2.5 py-1 rounded-xl bg-pink-600 text-white font-black text-xs">MoMo</span>
+                  <span className="px-2.5 py-1 rounded-xl bg-blue-600 text-white font-black text-xs">VNPay</span>
+                  <span className="px-2.5 py-1 rounded-xl bg-emerald-600 text-white font-black text-xs">ZaloPay</span>
+                </div>
+              </div>
+              <div className="absolute -top-12 -right-12 w-64 h-64 bg-sky-400/20 rounded-full blur-3xl pointer-events-none" />
+            </div>
+
+            {/* Quick Action Grid: Option 1: Renewal & Option 2: PT 1-on-1 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
+              
+              {/* Card 1: Gia Hạn Gói Tập */}
+              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-xs flex flex-col justify-between space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black">
+                        <CreditCard className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">1. Gia Hạn Gói Tập Gym</h3>
+                        <p className="text-xs text-slate-500">Tiếp tục duy trì thẻ hội viên không bị gián đoạn</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100">
+                      {currentStudent?.nhom === 'HSSV' ? 'Giá HSSV: 250k/tháng' : 'Giá Đi Làm: 300k/tháng'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="block text-xs font-bold text-slate-700 uppercase">
+                      Chọn Kỳ Hạn Gia Hạn:
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { months: 1, label: '1 Tháng', discount: '' },
+                        { months: 3, label: '3 Tháng', discount: 'Giảm 5%' },
+                        { months: 6, label: '6 Tháng', discount: 'Giảm 10%' }
+                      ].map(item => (
+                        <button
+                          key={item.months}
+                          type="button"
+                          onClick={() => setSelectedPlanMonths(item.months)}
+                          className={`p-3.5 rounded-2xl text-center border-2 transition-all cursor-pointer ${
+                            selectedPlanMonths === item.months
+                              ? 'border-emerald-600 bg-emerald-50/50 text-emerald-950 font-black ring-2 ring-emerald-500/20'
+                              : 'border-slate-100 hover:border-slate-300 text-slate-700 font-bold bg-white'
+                          }`}
+                        >
+                          <span className="text-sm block">{item.label}</span>
+                          {item.discount ? (
+                            <span className="text-[10px] text-emerald-600 font-extrabold uppercase block mt-0.5">
+                              {item.discount}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 block mt-0.5">Tiêu chuẩn</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Pricing detail calculation */}
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2 text-xs">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Đơn giá niêm yết:</span>
+                      <span>{monthlyFee.toLocaleString('vi-VN')} đ &times; {selectedPlanMonths} tháng</span>
+                    </div>
+                    {renewalDiscount > 0 && (
+                      <div className="flex justify-between text-emerald-700 font-bold">
+                        <span>Ưu đãi thanh toán dài hạn:</span>
+                        <span>-{(renewalSubtotal * renewalDiscount).toLocaleString('vi-VN')} đ (-{renewalDiscount * 100}%)</span>
+                      </div>
+                    )}
+                    <div className="pt-2 border-t border-slate-200 flex justify-between items-baseline font-black">
+                      <span className="text-slate-900">Tổng thanh toán:</span>
+                      <span className="text-2xl text-emerald-600">
+                        {renewalTotal.toLocaleString('vi-VN')} <span className="text-xs font-bold text-slate-500">VNĐ</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => openCheckout('GIA_HAN_GOI')}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                >
+                  <QrCode className="w-4 h-4" />
+                  <span>THANH TOÁN GIA HẠN NGAY</span>
+                </button>
+              </div>
+
+              {/* Card 2: Đăng Ký Ca PT 1-Kèm-1 */}
+              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-xs flex flex-col justify-between space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black">
+                        <CalendarDays className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">2. Đặt Ca PT 1-Kèm-1</h3>
+                        <p className="text-xs text-slate-500">Trị liệu cột sống & Tập cơ chuyên sâu cùng HLV</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-xl border border-blue-100">
+                      350.000 đ / Ca 90p
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 text-xs">
+                    <div>
+                      <label className="block font-bold text-slate-700 uppercase mb-1">Chọn Huấn Luyện Viên</label>
+                      <select
+                        value={selectedTrainerForPT}
+                        onChange={(e) => setSelectedTrainerForPT(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-bold text-slate-800 bg-white"
+                      >
+                        {trainers.map(t => (
+                          <option key={t.id} value={t.id}>
+                            {t.hoTen} - {t.vaiTro} ({t.chuyenMon})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-slate-700 uppercase mb-1">Ngày Tập</label>
+                        <input
+                          type="date"
+                          value={ptDate}
+                          onChange={(e) => setPtDate(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 font-semibold text-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 uppercase mb-1">Khung Giờ</label>
+                        <select
+                          value={ptTimeSlot}
+                          onChange={(e) => setPtTimeSlot(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 font-semibold text-slate-800 bg-white"
+                        >
+                          <option value="06:30 - 08:00">06:30 - 08:00 (Sáng sớm)</option>
+                          <option value="08:00 - 09:30">08:00 - 09:30 (Sáng)</option>
+                          <option value="09:30 - 11:00">09:30 - 11:00 (Trưa)</option>
+                          <option value="15:30 - 17:00">15:30 - 17:00 (Chiều)</option>
+                          <option value="17:30 - 19:00">17:30 - 19:00 (Tối ca 1)</option>
+                          <option value="19:00 - 20:30">19:00 - 20:30 (Tối ca 2)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 uppercase mb-1">Nội Dung / Tình Trạng Cơ Xương Khớp</label>
+                      <input
+                        type="text"
+                        value={ptSessionContent}
+                        onChange={(e) => setPtSessionContent(e.target.value)}
+                        placeholder="VD: Cột sống thắt lưng mỏi, muốn nắn chỉnh và tập cơ cốt lõi..."
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => openCheckout('DAT_CA_PT_1_1')}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-blue-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                >
+                  <CalendarDays className="w-4 h-4" />
+                  <span>ĐẶT LỊCH & THANH TOÁN 350.000 Đ</span>
+                </button>
+              </div>
+
+            </div>
+
+            {/* Payment Transaction History */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-xs space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
+                    <Receipt className="w-5 h-5 text-slate-700" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">
+                      Lịch Sử Giao Dịch Điện Tử
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Toàn bộ biên lai thanh toán trực tuyến của {currentStudent?.hoTen}
+                    </p>
+                  </div>
+                </div>
+
+                <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl">
+                  {studentTransactions.length} Giao Dịch
+                </span>
+              </div>
+
+              {studentTransactions.length === 0 ? (
+                <div className="text-center py-10 text-slate-400 space-y-2">
+                  <Receipt className="w-10 h-10 mx-auto text-slate-300" />
+                  <p className="text-sm font-semibold">Chưa có giao dịch thanh toán online nào.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {studentTransactions.map((tx) => (
+                    <div 
+                      key={tx.id}
+                      className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-md font-black text-[10px] text-white ${
+                            tx.congThanhToan === 'VIETQR' ? 'bg-sky-600' :
+                            tx.congThanhToan === 'MOMO' ? 'bg-pink-600' :
+                            tx.congThanhToan === 'VNPAY' ? 'bg-blue-600' : 'bg-emerald-600'
+                          }`}>
+                            {tx.congThanhToan}
+                          </span>
+                          <span className="font-mono text-slate-500 font-bold">{tx.maGiaoDichNganHang}</span>
+                          <span className="text-slate-400">&bull; {tx.ngayTao}</span>
+                        </div>
+                        <p className="font-bold text-slate-900 text-sm">{tx.noiDung}</p>
+                        {tx.thongTinPT && (
+                          <p className="text-slate-500 text-[11px]">
+                            HLV: {tx.thongTinPT.tenHLV} &bull; Ca: {tx.thongTinPT.khungGio} ngày {tx.thongTinPT.ngay}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="text-left sm:text-right shrink-0">
+                        <span className="text-lg font-black text-emerald-600 block">
+                          +{tx.soTien.toLocaleString('vi-VN')} đ
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                          <Check className="w-3 h-3" /> Thành công
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* CHECKOUT MODAL: QR CODE & PAYMENT GATEWAY SIMULATION */}
+        {/* ========================================================================= */}
+        {showCheckoutModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in">
+            <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden text-slate-900">
+              
+              {/* Modal Top Bar */}
+              <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold">
+                    <QrCode className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Cổng Thanh Toán Điện Tử HLV GYM</h3>
+                    <p className="text-[11px] text-slate-500">Bảo mật giao dịch liên ngân hàng NAPAS / Ví điện tử</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowCheckoutModal(false)}
+                  className="p-1 rounded-xl hover:bg-slate-200 text-slate-500 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 space-y-5">
+                
+                {/* When Transaction is NOT yet completed */}
+                {!completedPaymentTx ? (
+                  <>
+                    {/* Gateway Selector Tabs */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-2">
+                        Chọn Cổng / Phương Thức Thanh Toán:
+                      </label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          { id: 'VIETQR', name: 'VietQR', desc: 'Ngân Hàng', bg: 'hover:border-sky-500', active: 'border-sky-500 bg-sky-50 text-sky-900' },
+                          { id: 'MOMO', name: 'MoMo', desc: 'Ví Điện Tử', bg: 'hover:border-pink-500', active: 'border-pink-500 bg-pink-50 text-pink-900' },
+                          { id: 'VNPAY', name: 'VNPay', desc: 'QR Pay', bg: 'hover:border-blue-500', active: 'border-blue-500 bg-blue-50 text-blue-900' },
+                          { id: 'ZALOPAY', name: 'ZaloPay', desc: 'Ví / QR', bg: 'hover:border-emerald-500', active: 'border-emerald-500 bg-emerald-50 text-emerald-900' }
+                        ].map((gw) => (
+                          <button
+                            key={gw.id}
+                            type="button"
+                            onClick={() => setSelectedGateway(gw.id as CongThanhToan)}
+                            className={`p-2.5 rounded-2xl border-2 text-center transition-all cursor-pointer ${
+                              selectedGateway === gw.id ? `${gw.active} font-black shadow-xs` : 'border-slate-200 bg-white text-slate-600'
+                            }`}
+                          >
+                            <span className="text-xs font-bold block">{gw.name}</span>
+                            <span className="text-[9px] text-slate-400 block">{gw.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* QR Code Container and Transfer Details */}
+                    <div className="bg-slate-900 text-white p-5 rounded-3xl shadow-inner flex flex-col sm:flex-row items-center gap-5">
+                      {/* QR Display */}
+                      <div className="bg-white p-3 rounded-2xl shadow-md shrink-0 flex flex-col items-center">
+                        <div className="w-32 h-32 border-4 border-slate-900 p-1.5 rounded-xl flex flex-col justify-between">
+                          <div className="flex justify-between">
+                            <div className="w-7 h-7 bg-slate-900 flex items-center justify-center">
+                              <div className="w-3 h-3 bg-white"></div>
+                            </div>
+                            <div className="w-7 h-7 bg-slate-900 flex items-center justify-center">
+                              <div className="w-3 h-3 bg-white"></div>
+                            </div>
+                          </div>
+                          <div className="text-center font-mono font-black text-[10px] text-slate-900 tracking-wider">
+                            {selectedGateway}
+                          </div>
+                          <div className="flex justify-between">
+                            <div className="w-7 h-7 bg-slate-900 flex items-center justify-center">
+                              <div className="w-3 h-3 bg-white"></div>
+                            </div>
+                            <div className="w-7 h-7 border-2 border-slate-900 flex items-center justify-center">
+                              <div className="w-2.5 h-2.5 bg-slate-900"></div>
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-slate-600 font-extrabold mt-1.5 uppercase">
+                          Quét Mã Qua App
+                        </span>
+                      </div>
+
+                      {/* Info & Amount */}
+                      <div className="space-y-2 text-xs w-full text-center sm:text-left">
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                            Số tiền thanh toán:
+                          </span>
+                          <span className="text-2xl font-black text-amber-400">
+                            {currentPayAmount.toLocaleString('vi-VN')} đ
+                          </span>
+                        </div>
+
+                        <div className="bg-white/10 p-2.5 rounded-xl text-[11px] space-y-1">
+                          <p><span className="text-slate-400">Đơn vị thụ hưởng:</span> <strong>HLV GYM TRẢNG BOM</strong></p>
+                          <p><span className="text-slate-400">Số tài khoản / Ví:</span> <strong className="font-mono text-sky-300">0901234567</strong></p>
+                          <p><span className="text-slate-400">Nội dung chuyển khoản:</span> <strong className="font-mono text-emerald-300">{currentStudent?.id} {paymentPurpose === 'GIA_HAN_GOI' ? 'GIA HAN' : 'CA PT'}</strong></p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Simulate Button */}
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        disabled={isProcessingPayment}
+                        onClick={handleExecuteOnlinePayment}
+                        className={`w-full py-4 rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
+                          isProcessingPayment 
+                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                            : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 active:scale-98'
+                        }`}
+                      >
+                        {isProcessingPayment ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>ĐANG KẾT NỐI CỔNG {selectedGateway} & XÁC THỰC GD...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>MÔ PHỎNG QUÉT MÃ VÀ KHỚP LỆNH THÀNH CÔNG</span>
+                          </>
+                        )}
+                      </button>
+                      <p className="text-[10px] text-slate-400 text-center mt-2">
+                        💡 Thao tác này mô phỏng phản hồi Webhook tức thì từ {selectedGateway} về máy chủ phòng gym.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  /* When Transaction Succeeded */
+                  <div className="text-center py-6 space-y-4">
+                    <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center ring-8 ring-emerald-50 animate-bounce">
+                      <CheckCircle2 className="w-9 h-9" />
+                    </div>
+
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900">
+                        Thanh Toán Thành Công!
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Hệ thống đã nhận {completedPaymentTx.soTien.toLocaleString('vi-VN')} đ qua cổng {completedPaymentTx.congThanhToan}.
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs space-y-2 text-left max-w-sm mx-auto">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Mã giao dịch ngân hàng:</span>
+                        <span className="font-mono font-bold text-slate-800">{completedPaymentTx.maGiaoDichNganHang}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Thời gian:</span>
+                        <span className="font-semibold text-slate-700">{completedPaymentTx.ngayTao}</span>
+                      </div>
+                      {completedPaymentTx.thongTinGoi && (
+                        <div className="flex justify-between text-emerald-700 font-bold pt-1 border-t border-slate-200">
+                          <span>Hạn thẻ mới:</span>
+                          <span>{completedPaymentTx.thongTinGoi.ngayHetHanMoi}</span>
+                        </div>
+                      )}
+                      {completedPaymentTx.thongTinPT && (
+                        <div className="text-blue-700 font-bold pt-1 border-t border-slate-200">
+                          <span>Lịch PT 1:1 đã tạo: {completedPaymentTx.thongTinPT.tenHLV} ({completedPaymentTx.thongTinPT.khungGio})</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCheckoutModal(false);
+                          setActiveTab(paymentPurpose === 'GIA_HAN_GOI' ? 'CARD' : 'PAYMENT');
+                        }}
+                        className="w-full py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shadow-md transition-all cursor-pointer"
+                      >
+                        ĐÓNG & XEM LẠI THẺ HỘI VIÊN
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
 };
+
+

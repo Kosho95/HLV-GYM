@@ -1,4 +1,14 @@
-import type { HocVien, HuanLuyenVien, LichHenPT, HoSoTriLieu, CheckInLog } from '../types';
+import type { 
+  HocVien, 
+  HuanLuyenVien, 
+  LichHenPT, 
+  HoSoTriLieu, 
+  CheckInLog, 
+  BaiTapMau, 
+  NhatKyTapLuyen,
+  GiaoDichThanhToan
+} from '../types';
+
 
 export const INITIAL_TRAINERS: HuanLuyenVien[] = [
   {
@@ -270,3 +280,238 @@ export const INITIAL_CHECKIN_LOGS: CheckInLog[] = [
     goiTap: 'TL01'
   }
 ];
+
+export const EXERCISE_CATALOG: BaiTapMau[] = [
+  // Nhóm tập tạ (Strength)
+  {
+    id: 'EX_LAT_PULLDOWN',
+    ten: 'Kéo Xô Lat Pulldown',
+    nhomCo: 'Lưng xô (Lats)',
+    loai: 'STRENGTH',
+    metScore: 5.0,
+    donVi: 'REPS_SETS',
+    caloMoiRepKhoang: 0.35,
+    moTa: 'Phát triển nhóm xô lưng, mở rộng khung lưng v-taper và hỗ trợ kéo dãn đốt sống lưng.'
+  },
+  {
+    id: 'EX_BENCH_PRESS',
+    ten: 'Đẩy Ngực Ngang (Barbell Bench Press)',
+    nhomCo: 'Cơ Ngực (Chest)',
+    loai: 'STRENGTH',
+    metScore: 6.0,
+    donVi: 'REPS_SETS',
+    caloMoiRepKhoang: 0.45,
+    moTa: 'Tăng cường sức mạnh cơ ngực trên, ngực giữa, vai trước và tay sau.'
+  },
+  {
+    id: 'EX_BARBELL_SQUAT',
+    ten: 'Gánh Tạ Đùi Sau / Trước (Squat)',
+    nhomCo: 'Chân Đùi & Mông (Legs & Glutes)',
+    loai: 'STRENGTH',
+    metScore: 7.5,
+    donVi: 'REPS_SETS',
+    caloMoiRepKhoang: 0.65,
+    moTa: 'Bài tập vua kích hoạt toàn bộ cơ chi dưới, tiêu hao năng lượng cực cao.'
+  },
+  {
+    id: 'EX_DEADLIFT',
+    ten: 'Kéo Tạ Đất (Deadlift)',
+    nhomCo: 'Toàn thân & Chuỗi sau (Posterior Chain)',
+    loai: 'STRENGTH',
+    metScore: 8.0,
+    donVi: 'REPS_SETS',
+    caloMoiRepKhoang: 0.75,
+    moTa: 'Củng cố cơ lưng, mông, đùi sau và sức mạnh cầm nắm.'
+  },
+  {
+    id: 'EX_DUMBBELL_CURL',
+    ten: 'Cuốn Tạ Đơn Bắp Tay Trước (Bicep Curl)',
+    nhomCo: 'Tay trước (Biceps)',
+    loai: 'STRENGTH',
+    metScore: 3.8,
+    donVi: 'REPS_SETS',
+    caloMoiRepKhoang: 0.25,
+    moTa: 'Cô lập nhóm cơ bắp tay trước, định hình cơ bắp.'
+  },
+  {
+    id: 'EX_SEATED_CABLE_ROW',
+    ten: 'Kéo Cáp Ngồi (Seated Cable Row)',
+    nhomCo: 'Lưng giữa & Khung vai',
+    loai: 'STRENGTH',
+    metScore: 5.5,
+    donVi: 'REPS_SETS',
+    caloMoiRepKhoang: 0.38,
+    moTa: 'Khắc phục gù lưng, kéo khớp bả vai về vị trí sinh lý cân bằng.'
+  },
+  {
+    id: 'EX_SHOULDER_PRESS',
+    ten: 'Đẩy Vai Quá Đầu (Overhead Dumbbell Press)',
+    nhomCo: 'Cơ Vai (Deltoids)',
+    loai: 'STRENGTH',
+    metScore: 5.2,
+    donVi: 'REPS_SETS',
+    caloMoiRepKhoang: 0.35,
+    moTa: 'Xây dựng độ dày và độ rộng cho khớp vai.'
+  },
+  // Cardio & Vận động tim mạch
+  {
+    id: 'EX_INCLINE_TREADMILL',
+    ten: 'Đi Bộ Leo Dốc Máy Chạy (Incline Treadmill Walk)',
+    nhomCo: 'Tim Mạch, Đùi & Bắp Chân',
+    loai: 'CARDIO',
+    metScore: 6.8, // 5km/h với dốc 8-12%
+    donVi: 'DURATION',
+    moTa: 'Đốt mỡ tối đa, bảo vệ sụn khớp gối tốt hơn chạy bộ thông thường.'
+  },
+  {
+    id: 'EX_RUNNING_TREADMILL',
+    ten: 'Chạy Bộ Tốc Độ Vừa (8-10 km/h)',
+    nhomCo: 'Cardio Toàn Thân',
+    loai: 'CARDIO',
+    metScore: 9.8,
+    donVi: 'DURATION',
+    moTa: 'Tăng sức bền tim phổi và đốt năng lượng mạnh mẽ.'
+  },
+  {
+    id: 'EX_STATIONARY_BIKE',
+    ten: 'Đạp Xe Phòng Gym (Spinning Bike)',
+    nhomCo: 'Tim Mạch & Chân',
+    loai: 'CARDIO',
+    metScore: 7.0,
+    donVi: 'DURATION',
+    moTa: 'Nhịp tim duy trì vùng Zone 2-3 đốt mỡ, rất êm cho cột sống.'
+  },
+  {
+    id: 'EX_JUMP_ROPE',
+    ten: 'Nhảy Dây Thể Lực (Jump Rope)',
+    nhomCo: 'Cardio & Phản xạ',
+    loai: 'CARDIO',
+    metScore: 11.0,
+    donVi: 'DURATION',
+    moTa: 'Vận động cường độ cao, cải thiện độ linh hoạt cổ chân và nhịp thở.'
+  },
+  {
+    id: 'EX_PLANK_CORE',
+    ten: 'Plank Giữ Khối Cơ Lõi (Core Plank)',
+    nhomCo: 'Cơ Bụng & Cơ Lưng Dưới',
+    loai: 'HIIT_FUNCTIONAL',
+    metScore: 4.0,
+    donVi: 'DURATION',
+    moTa: 'Tăng cường vững vàng cột sống thắt lưng, ngăn ngừa đau lưng tái phát.'
+  }
+];
+
+export const INITIAL_WORKOUT_LOGS: NhatKyTapLuyen[] = [
+  {
+    id: 'WL_001',
+    maHV: 'HV005',
+    ngayTap: getOffsetDate(0),
+    thoiGian: '09:30',
+    tongCalo: 385,
+    tongThoiGianPhut: 45,
+    ghiChu: 'Buổi tập lưng và đi bộ leo dốc phục hồi. Cột sống cảm giác nhẹ nhõm, không bị buốt lưng.',
+    danhSachBaiTap: [
+      {
+        id: 'DT_01',
+        tenBaiTap: 'Kéo Xô Lat Pulldown',
+        loai: 'STRENGTH',
+        nhomCo: 'Lưng xô (Lats)',
+        soHiep: 4,
+        soRep: 12,
+        mucTaKg: 35,
+        caloTieuHao: 125
+      },
+      {
+        id: 'DT_02',
+        tenBaiTap: 'Đi Bộ Leo Dốc Máy Chạy (Incline Treadmill Walk)',
+        loai: 'CARDIO',
+        nhomCo: 'Tim Mạch, Đùi & Bắp Chân',
+        thoiGianPhut: 30,
+        cuongDo: 'TRUNG_BINH',
+        caloTieuHao: 260
+      }
+    ]
+  },
+  {
+    id: 'WL_002',
+    maHV: 'HV001',
+    ngayTap: getOffsetDate(-1),
+    thoiGian: '18:15',
+    tongCalo: 510,
+    tongThoiGianPhut: 55,
+    ghiChu: 'Tập ngực vai và chạy bộ nhẹ xả cơ',
+    danhSachBaiTap: [
+      {
+        id: 'DT_03',
+        tenBaiTap: 'Đẩy Ngực Ngang (Barbell Bench Press)',
+        loai: 'STRENGTH',
+        nhomCo: 'Cơ Ngực (Chest)',
+        soHiep: 4,
+        soRep: 10,
+        mucTaKg: 50,
+        caloTieuHao: 190
+      },
+      {
+        id: 'DT_04',
+        tenBaiTap: 'Đẩy Vai Quá Đầu (Overhead Dumbbell Press)',
+        loai: 'STRENGTH',
+        nhomCo: 'Cơ Vai (Deltoids)',
+        soHiep: 3,
+        soRep: 12,
+        mucTaKg: 14,
+        caloTieuHao: 110
+      },
+      {
+        id: 'DT_05',
+        tenBaiTap: 'Đi Bộ Leo Dốc Máy Chạy (Incline Treadmill Walk)',
+        loai: 'CARDIO',
+        thoiGianPhut: 25,
+        cuongDo: 'CAO',
+        caloTieuHao: 210
+      }
+    ]
+  }
+];
+
+export const INITIAL_TRANSACTIONS: GiaoDichThanhToan[] = [
+  {
+    id: 'GD_1001',
+    maHV: 'HV005',
+    tenHV: 'Hoàng Anh Tuấn',
+    soDienThoai: '0934567890',
+    congThanhToan: 'VIETQR',
+    mucDich: 'DAT_CA_PT_1_1',
+    soTien: 350000,
+    noiDung: 'HV005 DAT CA PT TRI LIEU 09H00',
+    ngayTao: '2026-10-14 08:30:15',
+    trangThai: 'THANH_CONG',
+    maGiaoDichNganHang: 'MBB_FT26101498271',
+    thongTinPT: {
+      maHLV: 'HLV02',
+      tenHLV: 'Nguyễn Quốc Thái',
+      ngay: '2026-10-14',
+      khungGio: '09:30 - 11:00',
+      noiDungTap: 'Nắn chỉnh giải áp thắt lưng L4-L5 & Phục hồi cơ cốt lõi'
+    }
+  },
+  {
+    id: 'GD_1002',
+    maHV: 'HV001',
+    tenHV: 'Võ Minh Quân',
+    soDienThoai: '0901234567',
+    congThanhToan: 'MOMO',
+    mucDich: 'GIA_HAN_GOI',
+    soTien: 250000,
+    noiDung: 'HV001 GIA HAN THE GYM HSSV 30 NGAY',
+    ngayTao: '2026-10-10 17:15:20',
+    trangThai: 'THANH_CONG',
+    maGiaoDichNganHang: 'MOMO_20261010_8849',
+    thongTinGoi: {
+      tenGoi: 'Thẻ Gym Học Sinh - Sinh Viên',
+      soThang: 1,
+      ngayHetHanMoi: '2026-11-09'
+    }
+  }
+];
+
+
