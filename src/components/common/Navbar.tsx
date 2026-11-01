@@ -12,6 +12,7 @@ import {
   Check
 } from 'lucide-react';
 import { useGym } from '../../context/GymContext';
+import { SunMoonSwitch } from './SunMoonSwitch';
 
 export const Navbar: React.FC = () => {
   const location = useLocation();
@@ -85,6 +86,9 @@ export const Navbar: React.FC = () => {
           {/* Actions & Switcher */}
           <div className="flex items-center gap-2.5">
             
+            {/* Animated Sun/Moon Light/Dark Switch */}
+            <SunMoonSwitch size="md" />
+
             {/* Trainer Switcher for Cross-Approval */}
             <div className="relative">
               <button

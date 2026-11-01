@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useGym } from '../context/GymContext';
+import { SunMoonSwitch } from '../components/common/SunMoonSwitch';
 import type { HocVien } from '../types';
 
 export const KioskPage: React.FC = () => {
@@ -248,17 +249,21 @@ export const KioskPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Anti-fraud Wi-Fi Badge */}
-        <div className="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-xs text-slate-300">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-          <Wifi className="w-4 h-4 text-emerald-400" />
-          <span className="font-semibold">
-            Wi-Fi Quầy Lễ Tân Trảng Bom
-          </span>
-          <span className="text-slate-500">|</span>
-          <span className="text-emerald-400 font-bold flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5" /> Hợp lệ
-          </span>
+        {/* Anti-fraud Wi-Fi Badge & Theme Switcher */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-xs text-slate-300">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+            <Wifi className="w-4 h-4 text-emerald-400" />
+            <span className="font-semibold">
+              Wi-Fi Quầy Lễ Tân Trảng Bom
+            </span>
+            <span className="text-slate-500">|</span>
+            <span className="text-emerald-400 font-bold flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5" /> Hợp lệ
+            </span>
+          </div>
+
+          <SunMoonSwitch size="md" />
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { GymProvider } from './context/GymContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { Navbar } from './components/common/Navbar';
 import { ToastContainer } from './components/common/ToastContainer';
 import { AdminLayout } from './components/layout/AdminLayout';
@@ -52,11 +53,13 @@ const AppContent: React.FC = () => {
 
 export const App: React.FC = () => {
   return (
-    <GymProvider>
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
-    </GymProvider>
+    <ThemeProvider>
+      <GymProvider>
+        <BrowserRouter>
+          <AppContent />
+        </BrowserRouter>
+      </GymProvider>
+    </ThemeProvider>
   );
 };
 
