@@ -53,13 +53,24 @@ export const StudentPortal: React.FC = () => {
     deleteWorkoutLog,
     calculateExerciseCalories,
     transactions,
-    processOnlinePayment
+    processOnlinePayment,
+    currentUser
   } = useGym();
 
+  // Active student selection (default to logged-in student or HV005)
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(() => {
+    if (currentUser.role === 'STUDENT' && currentUser.member) {
+      return currentUser.member.id;
+    }
+    return 'HV005';
+  });
 
+  useEffect(() => {
+    if (currentUser.role === 'STUDENT' && currentUser.member) {
+      setSelectedStudentId(currentUser.member.id);
+    }
+  }, [currentUser]);
 
-  // Active student selection (default to HV005 who has therapy record, or HV001)
-  const [selectedStudentId, setSelectedStudentId] = useState<string>('HV005');
   const currentStudent = members.find(m => m.id === selectedStudentId) || members[0];
 
   // Tab navigation inside Student Portal
@@ -419,24 +430,32 @@ export const StudentPortal: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Member Switcher for Demo */}
-          <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-2xl border border-slate-200/80">
-            <span className="text-xs font-bold text-slate-500 pl-2">Đổi tài khoản xem thử:</span>
-            <select
-              value={selectedStudentId}
-              onChange={(e) => {
-                setSelectedStudentId(e.target.value);
-                stopCamera();
-              }}
-              className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
-            >
-              {members.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.hoTen} ({m.id} - {m.hasFaceId ? '✓ Đã có Face ID' : 'Chưa có Face ID'})
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Role Status or Switcher for Trainers */}
+          {currentUser.role === 'TRAINER' ? (
+            <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-2xl border border-slate-200/80">
+              <span className="text-xs font-bold text-slate-500 pl-2">HLV xem hồ sơ học viên:</span>
+              <select
+                value={selectedStudentId}
+                onChange={(e) => {
+                  setSelectedStudentId(e.target.value);
+                  stopCamera();
+                }}
+                className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-500"
+              >
+                {members.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.hoTen} ({m.id} - {m.hasFaceId ? '✓ Đã có Face ID' : 'Chưa có Face ID'})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="px-3.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-600"></span> Hồ Sơ Hội Viên Chính Chủ
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Navigation Tabs */}
@@ -566,8 +585,7 @@ export const StudentPortal: React.FC = () => {
               <p className="text-xs text-slate-500 mb-6">Đưa mã QR này vào camera quầy Kiosk hoặc dùng nhận diện khuôn mặt Face ID để check-in</p>
 
               {/* Luxury Emerald Card */}
-              <div className="rounded-3xl p-6 sm:p-8 bg-gradient-to-tr from-emerald-800 via-teal-700 to-slate-900 text-white shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-400/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="rounded-3xl p-6 sm:p-8 bg-gradient-to-tr from-emerald-800 via-teal-700 to-slate-900 text-white shadow-xl relative overflow-hidden border border-emerald-700/50">
                 
                 <div className="flex items-center justify-between mb-8 relative">
                   <div>
@@ -1403,9 +1421,6 @@ export const StudentPortal: React.FC = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Background decorative glow */}
-              <div className="absolute -top-12 -right-12 w-64 h-64 bg-amber-400/20 rounded-full blur-3xl pointer-events-none" />
             </div>
 
             {/* Main Interactive Grid: Form Builder & Current Session Cart */}
@@ -1840,7 +1855,6 @@ export const StudentPortal: React.FC = () => {
                   <span className="px-2.5 py-1 rounded-xl bg-emerald-600 text-white font-black text-xs">ZaloPay</span>
                 </div>
               </div>
-              <div className="absolute -top-12 -right-12 w-64 h-64 bg-sky-400/20 rounded-full blur-3xl pointer-events-none" />
             </div>
 
             {/* Quick Action Grid: Option 1: Renewal & Option 2: PT 1-on-1 */}

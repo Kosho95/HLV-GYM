@@ -190,18 +190,14 @@ export const KioskPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-between p-4 sm:p-6 lg:p-8 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between p-4 sm:p-6 lg:p-8 relative">
       
-      {/* Background Glow */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
-
       {/* Top Header: Anti-fraud Wi-Fi info & Back link */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-800">
         <div className="flex items-center gap-3">
           <Link
             to="/admin/dashboard"
-            className="p-2.5 rounded-2xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+            className="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
             title="Trở về Trang Quản Trị"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -212,40 +208,40 @@ export const KioskPage: React.FC = () => {
               <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
                 KIOSK TIẾP TÂN &bull; HLV GYM
               </h1>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                Tự Phục Vụ
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800">
+                Tablet Điểm Danh Quầy
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Hệ thống nhận diện sinh trắc học Face ID & Điểm danh quầy tự động
+              Điểm danh tự phục vụ &bull; Nhận diện khuôn mặt hoặc Nhập mã hội viên / SĐT
             </p>
           </div>
         </div>
 
         {/* Mode Selector Tabs */}
-        <div className="flex items-center gap-2 bg-slate-800/90 p-1.5 rounded-2xl border border-slate-700">
+        <div className="flex items-center gap-1.5 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
           <button
             onClick={() => setCheckInMode('FACE_ID')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
               checkInMode === 'FACE_ID'
-                ? 'bg-emerald-500 text-slate-900 shadow-md shadow-emerald-500/20 font-black'
+                ? 'bg-emerald-600 text-white shadow-sm font-black'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <ScanFace className="w-4 h-4" />
-            <span>Quét Face ID (Bảo Mật)</span>
+            <span>Camera Khuôn Mặt</span>
           </button>
 
           <button
             onClick={() => setCheckInMode('NUMPAD')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
               checkInMode === 'NUMPAD'
-                ? 'bg-emerald-500 text-slate-900 shadow-md shadow-emerald-500/20 font-black'
+                ? 'bg-emerald-600 text-white shadow-sm font-black'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <Keyboard className="w-4 h-4" />
-            <span>Nhập Mã / SĐT</span>
+            <span>Bàn Phím Số / SĐT</span>
           </button>
         </div>
 

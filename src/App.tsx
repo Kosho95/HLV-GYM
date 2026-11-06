@@ -14,6 +14,26 @@ import { AdminSchedule } from './pages/admin/AdminSchedule';
 import { AdminTherapy } from './pages/admin/AdminTherapy';
 import { KioskPage } from './pages/KioskPage';
 import { StudentPortal } from './pages/StudentPortal';
+import { LoginPage } from './pages/LoginPage';
+import { useGym } from './context/GymContext';
+
+// Protected Route for Trainers
+const TrainerRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentUser } = useGym();
+  if (currentUser.role !== 'TRAINER') {
+    return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
+};
+
+// Protected Route for Students (or Trainers inspecting student view)
+const StudentRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentUser } = useGym();
+  if (currentUser.role === 'GUEST') {
+    return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
+};
 
 // Component to conditionally show Navbar (Kiosk page is dedicated full-screen tablet mode)
 const AppContent: React.FC = () => {
@@ -27,8 +47,15 @@ const AppContent: React.FC = () => {
         {/* Landing Portal */}
         <Route path="/" element={<LandingPage />} />
 
-        {/* Admin Back-office */}
-        <Route path="/admin" element={<AdminLayout />}>
+        {/* Authentication */}
+        <Route path="/login" element={<LoginPage />} />
+
+        {/* Admin Back-office (Protected for HLV) */}
+        <Route path="/admin" element={
+          <TrainerRoute>
+            <AdminLayout />
+          </TrainerRoute>
+        }>
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="members" element={<AdminMembers />} />
@@ -39,8 +66,12 @@ const AppContent: React.FC = () => {
         {/* Self-service Reception Kiosk */}
         <Route path="/kiosk" element={<KioskPage />} />
 
-        {/* Student Portal */}
-        <Route path="/student" element={<StudentPortal />} />
+        {/* Student Portal (Protected for Student or Trainer) */}
+        <Route path="/student" element={
+          <StudentRoute>
+            <StudentPortal />
+          </StudentRoute>
+        } />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -9,7 +9,8 @@ import type {
   BaiTapMau,
   NhatKyTapLuyen,
   GiaoDichThanhToan,
-  CongThanhToan
+  CongThanhToan,
+  AuthUser
 } from '../types';
 import { 
   INITIAL_MEMBERS, 
@@ -47,8 +48,12 @@ interface GymContextType {
   therapyRecords: HoSoTriLieu[];
   checkInLogs: CheckInLog[];
   activeTrainer: HuanLuyenVien;
+  currentUser: AuthUser;
   toasts: ToastMessage[];
   setActiveTrainer: (trainer: HuanLuyenVien) => void;
+  loginTrainer: (trainerId: string) => boolean;
+  loginStudent: (identifier: string) => boolean;
+  logout: () => void;
   removeToast: (id: string) => void;
   addToast: (type: ToastMessage['type'], title: string, message: string) => void;
   
@@ -116,7 +121,8 @@ const STORAGE_KEYS = {
   LOGS: 'hlvgym_checkin_logs_v2',
   TRAINER: 'hlvgym_active_trainer_v2',
   WORKOUTS: 'hlvgym_workouts_v1',
-  TRANSACTIONS: 'hlvgym_transactions_v1'
+  TRANSACTIONS: 'hlvgym_transactions_v1',
+  AUTH: 'hlvgym_auth_user_v1'
 };
 
 export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -235,6 +241,54 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
+  const [currentUser, setCurrentUser] = useState<AuthUser>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.AUTH);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return { role: 'GUEST' };
+  });
+
+  const loginTrainer = (trainerId: string): boolean => {
+    const found = trainers.find(t => t.id === trainerId);
+    if (!found) return false;
+    const auth: AuthUser = { role: 'TRAINER', trainer: found };
+    setCurrentUser(auth);
+    setActiveTrainerState(found);
+    localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify(auth));
+    localStorage.setItem(STORAGE_KEYS.TRAINER, JSON.stringify(found));
+    addToast('success', 'Đăng nhập HLV thành công', `Xin chào Huấn luyện viên ${found.hoTen}`);
+    return true;
+  };
+
+  const loginStudent = (identifier: string): boolean => {
+    const clean = identifier.trim().toLowerCase();
+    const found = members.find(m => 
+      m.id.toLowerCase() === clean || 
+      m.soDienThoai.replace(/\D/g, '') === clean.replace(/\D/g, '')
+    );
+    if (!found) {
+      addToast('error', 'Không tìm thấy học viên', 'Vui lòng kiểm tra lại Mã học viên (VD: HV001) hoặc Số điện thoại');
+      return false;
+    }
+    const auth: AuthUser = { role: 'STUDENT', member: found };
+    setCurrentUser(auth);
+    localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify(auth));
+    addToast('success', 'Đăng nhập thành công', `Chào mừng học viên ${found.hoTen}`);
+    return true;
+  };
+
+  const logout = () => {
+    const auth: AuthUser = { role: 'GUEST' };
+    setCurrentUser(auth);
+    localStorage.removeItem(STORAGE_KEYS.AUTH);
+    addToast('info', 'Đã đăng xuất', 'Bạn đang ở chế độ khách vãng lai');
+  };
+
   // Sync to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.MEMBERS, JSON.stringify(members));
@@ -280,6 +334,11 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setActiveTrainer = (trainer: HuanLuyenVien) => {
     setActiveTrainerState(trainer);
+    if (currentUser.role === 'TRAINER') {
+      const auth: AuthUser = { role: 'TRAINER', trainer };
+      setCurrentUser(auth);
+      localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify(auth));
+    }
     addToast('info', 'Chuyển Đổi Quản Trị Viên', `Bạn đang thao tác với tư cách: ${trainer.hoTen} (${trainer.vaiTro})`);
   };
 
@@ -832,11 +891,15 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       therapyRecords,
       checkInLogs,
       activeTrainer,
+      currentUser,
       workoutLogs,
       exerciseCatalog,
       transactions,
       toasts,
       setActiveTrainer,
+      loginTrainer,
+      loginStudent,
+      logout,
       removeToast,
       addToast,
       addMember,

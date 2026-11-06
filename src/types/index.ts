@@ -171,4 +171,13 @@ export interface GiaoDichThanhToan {
   };
 }
 
+export type UserRole = 'GUEST' | 'TRAINER' | 'STUDENT';
+
+export interface AuthUser {
+  role: UserRole;
+  trainer?: HuanLuyenVien;
+  member?: HocVien;
+}
+
+
 
